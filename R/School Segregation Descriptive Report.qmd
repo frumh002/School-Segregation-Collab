@@ -1,0 +1,494 @@
+---
+title: "School Segregation Descriptive Report"
+author: 
+  - Mateo Frumholtz
+  - Sara Garcia
+date: 06-20-2024
+format: html
+toc: true
+execute:
+  warning: false
+  error: false
+---
+
+# Questions for the group
+
+1. There seems to be conflicting information regarding what schools are metro vs. not?
+2. Do we want to add all charter and private schools or are we only focused on private schools?
+3. Some school districts are missing 2022 data (like St. Paul for ex.)? Can we supplement NCES data from somewhere else?
+
+
+```{r prep}
+#| echo: false
+#| include: false
+
+rm(list=ls())
+
+# Install Needed Packages -------------------------------------------------
+
+library(tidyverse)
+library(readxl)
+library(summarytools)
+library(gt)
+library(ggtext)
+library(gt)
+library(gtExtras)
+
+# Import Dataset
+source("Import Data.R")
+
+# Metro Prep ----------------------------------------------------------
+# Metro districts were compiled from the list of metro school districts in the 2021 MDE Public Enrollment File (called FY2021 MDE Enrollment)
+metro.districts <- c("Academia Cesar Chavez Charter School",
+                     "Academic Arts High School",
+                     "Achieve Language Academy",
+                     "Afsa High School",
+                     "Agamim Classical Academy",
+                     "Anoka-Hennepin",
+                     "Anoka-Hennepin School District", 
+                     "Anoka-Hennepin Public School District",
+                     "Aspen Academy",
+                     "Athlos Leadership Academy",
+                     "Augsburg Fairview Academy",
+                     "Aurora Charter School",
+                     "Avalon School",
+                     "Bdote Learning Center",
+                     "Beacon Academy",
+                     "Belle Plaine",
+                     "Belle Plaine Public School District",
+                     "Best Academy",
+                     "Bloomington",
+                     "Bloomington Public School District",
+                     "Bluesky Charter School",
+                     "Brooklyn Center School District",
+                     "Buffalo-Hanover-Montrose Public Schools",
+                     "Buffalo-Hanover-Montrose Schools",
+                     "Burnsville",
+                     "Burnsville Public School District",
+                     "Burnsville-Eagan-Savage Schools",
+                     "Career Pathways",
+                     "Cedar Riverside Community School",
+                     "Centennial Public School District",
+                     "Central Public School District",
+                     "Chisago Lakes School District", # MDE does not have this on the metro list
+                     "City Academy",
+                     "College Preparatory Elementary",
+                     "Cologne Academy",
+                     "Columbia Heights Public School District",
+                     "Community Of Peace Academy",
+                     "Community School Of Excellence",
+                     "Cornerstone Montessori Elementary",
+                     "Cyber Village Academy",
+                     "Davinci Academy",
+                     "Delano Public School District", # MDE does not have this on the metro list
+                     "Discovery Charter School",
+                     "Eagle Ridge Academy Charter School",
+                     "Eastern Carver County Public School",
+                     "Eden Prairie",
+                     "Eden Prairie Public School District",
+                     "Edina",
+                     "Edina Public School District",
+                     "El Colegio Charter School",
+                     "Elk River", # MDE does not have this on the metro list
+                     "Excell Academy Charter",
+                     "Face To Face Academy",
+                     "Farmington",
+                     "Farmington Public School District",
+                     "FIT Academy",
+                     "Forest Lake",
+                     "Forest Lake Public School District",
+                     "Fridley Public School District",
+                     "Friendship Academy of the Arts",
+                     "Gateway STEM Academy",
+                     "Global Academy",
+                     "Great Oaks Academy Charter School",
+                     "Great River School",
+                     "Hastings Public School District",
+                     "Hennepin Schools",
+                     "Hiawatha Academies",
+                     "High School For Recording Arts",
+                     "Higher Ground Academy",
+                     "Hmong College Prep Academy",
+                     "Hope Community Academy",
+                     "Hopkins Public School District",
+                     "Horizon Science Academy Twin Cities",
+                     "Inver Grove Heights Schools",
+                     "Innovation Sci & Tech Academy",
+                     "Intermediate School District 287",
+                     "Intermediate School District 917",
+                     "International Spanish Language Acad",
+                     "Inver Grove Heights Schools",
+                     "Jennings Community School",
+                     "Jordan Public School District",
+                     "Kipp Minnesota Charter School",
+                     "Lakes International Language Academ",
+                     "Lakeville",
+                     "Lakeville Area Schools", 
+                     "Lakeville Public School District",
+                     "Lakeville School District",
+                     "Laura Jeffrey Academy Charter",
+                     "Legacy of Dr Josie R Johnson Montes",
+                     "Level Up Academy",
+                     "Le Sueur-Henderson School District", # MDE does not have this one on their metro list
+                     "Life Prep",
+                     "Lincoln International High School",
+                     "Lionsgate Academy",
+                     "Loveworks Academy For Arts",
+                     "Mahtomedi Public School District",
+                     "Marine Area Community School",
+                     "Mastery School",
+                     "Math And Science Academy",
+                     "Metro Deaf School",
+                     "Metro Schools Charter",
+                     "Metro Tech Academy",
+                     "Midway Star Academy",
+                     "Minneapolis Public School District",
+                     "Minnesota Department Of Corrections",
+                     "Minnesota Excellence in Learning Ac",
+                     "Minnesota Internship Center",
+                     "Minnesota Math and Science Academy",
+                     "Minnesota Online High School",
+                     "Minnesota Transitions Charter Schools",
+                     "Minnesota Wildflower Montessori Schools",
+                     "Minnetonka",
+                     "Minnetonka Public School District",
+                     "Modern Montessori Charter School",
+                     "Mounds View",
+                     "Mounds View Public School District",
+                     "Nasha Shkola Charter School",
+                     "New Century School",
+                     "New City School",
+                     "New Heights School Inc.",
+                     "New Millennium Academy",
+                     "New Prague Area Schools",
+                     "Noble Academy",
+                     "North Lakes Academy",
+                     "North Metro Flex Academy",
+                     "North St Paul-Maplewood Oakdale District",
+                     "North St Paul-Maplewood School District",
+                     "Northeast College Prep",
+                     "Northeast Metro 916",
+                     "Northfield Public School District", # MDE does not have this in their metro list
+                     "Northwest Passage High School",
+                     "Notre Ecole Academy",
+                     "Nova Classical Academy",
+                     "Orono Public School District",
+                     "Osseo Public School District",
+                     "Pact Charter School",
+                     "Paladin Career and Tech High School",
+                     "Parnassus Preparatory Charter Schools",
+                     "Partnership Academy Inc.",
+                     "Perpich Center For Arts Education",
+                     "PIM Arts High School",
+                     "Prairie Creek Community School",
+                     "Prairie Seeds Academy",
+                     "Prior Lake-Savage Area Schools",
+                     "Prodeo Academy",
+                     "Progeny Academy Charter School",
+                     "Quantum STEAM Academy Charter",
+                     "Randolph Public School District",
+                     "Richfield Public School District",
+                     "Robbinsdale Public School District",
+                     "Rockford Public School District", # MDE does not have this in their metro list
+                     "Rosemount-Apple Valley-Eagan",
+                     "Roseville Public School District",
+                     "Sage Academy Charter School",
+                     "Saint Paul Public Schools",
+                     "SciTech Academy Charter School",
+                     "Sejong Academy of Minnesota",
+                     "Seven Hills Preparatory Academy",
+                     "Shakopee Public School District",
+                     "Skyline Math and Science Academy",
+                     "Sojourner Truth Academy",
+                     "South St. Paul Public School District",
+                     "South Washington County Schools",
+                     "Southside Family Charter School",
+                     "Southwest Metro Intermediate 288",
+                     "Spero Academy",
+                     "Spring Lake Park Public Schools",
+                     "St Paul Conservatory Performing Art",
+                     "St. Anthony-New Brighton Schools",
+                     "St. Croix Preparatory Academy",
+                     "St. Francis Area Schools",
+                     "St. Louis Park",
+                     "St. Louis Park Public School District",
+                     "St. Michael-Albertville Schools", # MDE does not have this in their metro list
+                     "St. Paul",
+                     "St. Paul City School",
+                     "St. Paul Public School District",
+                     "St. Paul School of Northern Lights",
+                     "Star of the North Academy Charter S",
+                     "STEAM Academy Charter School",
+                     "Stillwater Area Public School District",
+                     "Stillwater Area Public Schools",
+                     "Stonebridge World School",
+                     "Success Academy",
+                     # MDE has a school called TESFA INTERNATIONAL SCHOOL that is not in the NCES dataset
+                     "The Journey School",
+                     "Twin Cities Academy",
+                     "Twin Cities German Immersion Chtr",
+                     "Twin Cities International Schools",
+                     "Ubah Medical Academy Charter School",
+                     "Universal Academy Charter School",
+                     "Upper Mississippi Academy",
+                     "Urban Academy",
+                     "Venture Academy",
+                     "Waconia",
+                     "Waconia Public School District",
+                     "Watershed High School",
+                     "Watertown-Mayer Public School District",
+                     "Wayzata Public School District",
+                     "West St. Paul-Mendota Heights-Eagan",
+                     "Westonka Public School District",
+                     "White Bear Lake School District",
+                     "Woodbury Leadership Academy",
+                     "World Learner Charter School",
+                     "Yinghua Academy")
+# This second list comes from this list: https://education.mn.gov/mdeprod/groups/educ/documents/basic/mdaw/mdaw/~edisp/000803.pdf
+metro.districts2 <- c("Anoka-Hennepin School District",           
+                      "Anoka-Hennepin Public School District",   
+                      "Belle Plaine Public School District",      
+                      "Bloomington Public School District",      
+                      "Brooklyn Center School District",          
+                      "Buffalo-Hanover-Montrose Public Schools", 
+                      "Buffalo-Hanover-Montrose Schools",         
+                      "Burnsville",                              
+                      "Burnsville Public School District",        
+                      "Burnsville-Eagan-Savage Schools",         
+                      "Centennial Public School District",        
+                      "Central Public School District",          
+                      "Chisago Lakes School District",            
+                      "Columbia Heights Public School District", 
+                      "Delano Public School District",            
+                      "Eastern Carver County Public School",     
+                      "Eden Prairie",                             
+                      "Eden Prairie Public School District",     
+                      "Edina",                                    
+                      "Elk River",                               
+                      "Farmington Public School District",        
+                      "Forest Lake Public School District",      
+                      "Fridley Public School District",           
+                      "Hastings Public School District",         
+                      "Hopkins Public School District",           
+                      "Inver Grove Heights Schools",             
+                      "Jordan Public School District",            
+                      "Lakeville Area Schools",                  
+                      "Lakeville Public School District",         
+                      "Le Sueur-Henderson School District",      
+                      "Mahtomedi Public School District",         
+                      "Minneapolis Public School District",      
+                      "Minnetonka Public School District",        
+                      "Mounds View Public School District",      
+                      "New Prague Area Schools",                  
+                      "North St Paul-Maplewood Oakdale District",
+                      "Northfield Public School District",        
+                      "Orono Public School District",            
+                      "Osseo Public School District",             
+                      "Prior Lake-Savage Area Schools",          
+                      "Randolph Public School District",          
+                      "Richfield Public School District",        
+                      "Robbinsdale Public School District",       
+                      "Rockford Public School District",         
+                      "Rosemount-Apple Valley-Eagan",             
+                      "Roseville Public School District",  
+                      "Saint Paul Public Schools",
+                      "Shakopee Public School District",          
+                      "South St. Paul Public School District",   
+                      "South Washington County Schools",          
+                      "Spring Lake Park Public Schools",         
+                      "St. Anthony-New Brighton Schools",         
+                      "St. Francis Area Schools",                
+                      "St. Louis Park Public School District",    
+                      "St. Michael-Albertville Schools",         
+                      "St. Paul Public School District",          
+                      "Stillwater Area Public Schools",          
+                      "Waconia Public School District",           
+                      "Watertown-Mayer Public School District",  
+                      "Wayzata Public School District",           
+                      "West St. Paul-Mendota Heights-Eagan",     
+                      "Westonka Public School District",          
+                      "White Bear Lake School District")
+
+# Import Datasets ---------------------------------------------------------
+# The files are way to big to upload onto GIT so you will have to adjust this code to import the files in your own computer using whatever path you need. 
+
+schools <- df %>% 
+  mutate(mpls = case_when(leaname=="Minneapolis Public School District" ~ c("Minneapolis"),
+                          TRUE ~ c("Other")),
+         metro = case_when(leaname %in% metro.districts ~ "Metro",
+                           TRUE ~ "Greater"))
+rm(df)
+# Variables Prep ----------------------------------------------------------
+
+metro.perc <- as.character(schools %>% 
+  filter(year=="2022") %>% 
+  group_by(metro) %>% 
+  summarise(tot = sum(member)) %>% 
+  mutate(perc = round(tot/sum(tot), 2)*100) %>% 
+  filter(metro=="Metro") %>% 
+  select(perc))
+
+
+# Analysis Prep -----------------------------------------------------------
+
+distr.dems <- schools %>% 
+  select(year, schoolname, nces7_final, leaname, 
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white) %>% 
+  pivot_longer(c(-year, -schoolname, -nces7_final, -leaname), names_to = "name", values_to = "value") %>% 
+  mutate(value = floor(value)) %>% 
+  group_by(year, leaname, name) %>% 
+  mutate(total_district = sum(value)) %>% 
+  select(-schoolname, -value, -nces7_final) %>% 
+  distinct() %>% 
+  arrange(leaname, desc(year)) %>% 
+  mutate(
+    name = case_when(name=="tot_nam" ~ "distr_nam",
+                     name=="tot_black" ~ "distr_black",
+                     name=="tot_hisp" ~ "distr_hisp",
+                     name=="tot_asian" ~ "distr_asian",
+                     name=="tot_tr" ~ "distr_tr",
+                     name=="tot_white" ~ "distr_white",
+                     TRUE ~ name)
+  ) %>% 
+  pivot_wider(names_from = "name", values_from = "total_district") %>% 
+  mutate(
+    distr_bipoc = distr_nam + distr_black + distr_hisp + distr_asian + distr_tr
+  )
+
+
+```
+
+
+# Metro School Enrollment 1991-2022
+## Total Student Enrollment
+
+```{r total_enroll_prep}
+#| echo: false
+#| include: false
+
+tims <- schools %>% 
+  filter(metro=="Metro") %>% 
+  select(year, leaname, member) %>% 
+  mutate(member = floor(member)) %>% 
+  group_by(year, leaname) %>%
+  summarise(tot = sum(member)) %>% 
+  mutate(perc = round(tot/sum(tot), 3) *100) %>% 
+  select(leaname, year, perc) %>%
+  ungroup() %>% 
+  complete(leaname, year, fill = list(perc = 0)) %>% 
+  arrange(leaname, year) %>% 
+  group_by(leaname) %>%
+  summarise(tms = list(c(perc)))
+
+```
+
+
+```{r total_enrollment_table}
+#| echo: false
+
+# Table of Enrollment in Metro School Districts ---------------------------
+
+schools %>% 
+  filter(metro=="Metro", year %in% c(1991, 2001, 2011, 2022)) %>% 
+  select(year, leaname, member) %>% 
+  mutate(member = floor(member)) %>% 
+  group_by(year, leaname) %>%
+  summarise(tot = sum(member)) %>% 
+  mutate(perc = tot/sum(tot)) %>% 
+  pivot_wider(names_from = "year", values_from = c("tot", "perc")) %>% 
+  left_join(tims, by = "leaname") %>% 
+  arrange(desc(perc_2022)) %>% 
+  mutate(perc_run = cumsum(perc_2022)) %>% 
+  gt() %>% 
+  fmt_percent(
+    columns = starts_with("perc"),
+    decimals = 1
+    ) %>% 
+  fmt_integer(
+    columns = starts_with("tot"),
+  ) %>% 
+  gt_plt_sparkline(
+    column = tms,
+    type = "shaded",
+    palette = c("grey40", "grey40", "red", "blue", "grey40"),
+    fig_dim = c(7, 28)
+  ) %>% 
+  gt_highlight_rows(
+    rows = which(perc_run<0.51),
+    font_weight = "normal",
+    fill = "grey90"
+  ) %>% 
+  tab_header(
+    title = "Twin Cities Metro School District Enrollment Over Time",
+    subtitle = "1991-2022 Enrollment from MDE Public File"
+  ) %>% 
+  opt_align_table_header(align = "center") %>% 
+  cols_align(
+    align = c("center"),
+    columns = everything()
+  ) %>% 
+  tab_spanner(label = "Count", columns = starts_with("tot")) %>% 
+  tab_spanner(label = "Percent of TC Metro", columns = starts_with("perc")) %>% 
+  tab_footnote(
+    footnote = "The proportion of TC Metro enrollment between 1991-2022. Blue dot indicates the highest enrollment proportion and red indicates the lowest proportion enrollment. The text indicates the most recent enrollment proportion.",
+    locations = cells_column_labels(columns = tms)
+  ) %>% 
+  tab_footnote(
+    footnote = "The highlighted rows make up 50% of the entire TC metro enrollment.",
+    locations = cells_column_labels(columns = leaname)
+  ) %>%
+  tab_source_note(
+    source_note = "Data source is the Stanford NCES Dataset for 1991-2022 Enrollment."
+  ) %>% 
+  cols_label(
+    leaname = "School District",
+    tot_1991 = "1991",
+    tot_2001 = "2001",
+    tot_2011 = "2011",
+    tot_2022= "2022",
+    perc_1991 = "1991",
+    perc_2001 = "2001",
+    perc_2011 = "2011",
+    perc_2022 = "2022",
+    tms = "Percent Over Time",
+    perc_run = "2022 Cumulative"
+  ) %>%
+  tab_style(locations = cells_title("title"), 
+            style = cell_text(weight = 700)) %>% 
+  tab_style(locations = cells_column_spanners(spanners = "Count"), 
+            style = cell_text(transform = "uppercase", v_align = "bottom", size = px(14), weight = 500)) %>% 
+  tab_style(locations = cells_title("subtitle"), 
+            style = cell_text(weight = 500)) %>% 
+  tab_style(style = list(cell_borders(sides = "top", color = "black", weight = px(0)), cell_text(transform = "uppercase", v_align = "bottom", size = px(14), weight = 500)),
+            locations = gt::cells_column_labels(columns = gt::everything())) %>%
+  tab_style(style = cell_borders(sides = "bottom", 
+                                 color = "black", 
+                                 weight = px(1)), 
+            locations = cells_row_groups()) %>% 
+  tab_options(column_labels.background.color = "white", 
+              data_row.padding = px(3), 
+              heading.border.bottom.style = "none", 
+              table.border.top.width = px(3), 
+              table.border.top.style = "none", 
+              table.border.bottom.style = "none", 
+              column_labels.font.weight = "normal", 
+              column_labels.border.top.style = "none", 
+              column_labels.border.bottom.width = px(2), 
+              column_labels.border.bottom.color = "black", 
+              row_group.border.top.style = "none", 
+              row_group.border.top.color = "black", 
+              row_group.border.bottom.width = px(1), 
+              row_group.border.bottom.color = "white", 
+              stub.border.color = "white", 
+              stub.border.width = px(0), 
+              source_notes.font.size = 12, 
+              source_notes.border.lr.style = "none", 
+              table.font.size = 16)
+
+```
+
+
+
+
+
+
