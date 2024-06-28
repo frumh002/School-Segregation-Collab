@@ -16,6 +16,10 @@ execute:
 1. There seems to be conflicting information regarding what schools are metro vs. not?
 2. Do we want to add all charter and private schools or are we only focused on private schools?
 3. Some school districts have common names (St. Paul Public School District vs. Sain Paul Public Schools | Eden Prairie vs. Eden Paririe Public School District | etc.) - do we merge these or are they separate districts?
+4. The total enrollment seems to be a decimal. Is it appropriate to round down? (conservative)
+5. Many schools are missing level over time, and some have conflicting levels (High School in 2011 and 2013 but Other/Ungraded in 2012). Can we impute standard levels across schools?
+6. I feel like we need to stratify by school levels? The levels analysis I did clearly shows that elementary schools are major culprits to segregation.
+7. Do we add pre-K to levels analysis? Other ungraded?
 
 
 ```{r prep}
@@ -371,10 +375,7 @@ top.metro.districts <- schools %>%
 ```
 
 
-# Metro School Enrollment 1991-2022
-
-## Segregation of Schools Over Time
-For the top districts for black, hispanic, asian, and overall students, let's see how the % BIPOC within those districts changes over time?
+# BIPOC Metro School Enrollment 1991-2022
 
 ## Enrollment Breakdown Over Time
 
@@ -531,6 +532,1122 @@ distr.dems %>%
 
 ```
 
+## Proportion of BIPOC Students by Metro District
+
+```{r bipoc_metro_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Percent of BIPOC Students by District -----------------------------------
+
+distr.dems %>% 
+  filter(leaname %in% top.metro.districts) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc = distr_bipoc / distr_total
+  ) %>% 
+  select(year, leaname, perc_bipoc) %>% 
+  ggplot() +
+  aes(x = year, y = perc_bipoc, group = leaname, color = leaname) +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  scale_color_manual(values = c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
+  labs(
+    # Main title label
+    title = "Percent BIPOC for Largest Minnesota Twin Cities School Districts, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These School Districts Account for 50% of Twin Cities Metro Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent of Enrolled Students",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) +
+  guides(color = guide_legend(nrow = 6, byrow = TRUE))
+
+
+```
+
+## Percent of BIPOC Students by School Across Metro Districts
+
+```{r bipoc_school_prep}
+#| echo: false
+#| include: false
+
+bip.tim <- schools %>% 
+  filter(leaname %in% metro.districts) %>% 
+  select(year, schoolname, leaname,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member") %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_bipoc_sch = tot_bipoc / tot_member
+  ) %>% 
+  left_join(distr.dems, by = c("leaname", "year")) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc_distr = tot_bipoc / distr_bipoc) %>% 
+  select(year, leaname, schoolname, perc_bipoc_sch, perc_bipoc_distr) %>% 
+  pivot_longer(c(-year, -leaname, -schoolname), names_to = "type", values_to = "value")
+
+```
+
+
+```{r bipoc_school_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Percent of BIPOC Students by School -------------------------------------
+
+bip.tim %>% 
+  filter(type=="perc_bipoc_sch", leaname %in% top.metro.districts) %>% 
+  ggplot() +
+  aes(x = year, y = value, group = schoolname) +
+  geom_line(size = 0.4, color = "#E13342FF") +
+  facet_wrap(~leaname) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  labs(
+    # Main title label
+    title = "Percent BIPOC by School for Largest Minnesota Twin Cities School Districts, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These School Districts Account for 50% of Twin Cities Metro Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent of Enrolled Students",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  )
+
+
+```
+
+## Percent of Metro District's BIPOC Students by School
+
+```{r bipoc_district_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Percent of District BIPOC Students by School ----------------------------
+
+bip.tim %>% 
+  filter(type=="perc_bipoc_distr", leaname %in% top.metro.districts) %>% 
+  ggplot() +
+  aes(x = year, y = value, group = schoolname) +
+  geom_line(size = 0.4, color = "#40B7ADFF") +
+  facet_wrap(~leaname) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 0.4)) +
+  labs(
+    # Main title label
+    title = "Percent of District BIPOC Students by School for Largest Minnesota Twin Cities School Districts, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These School Districts Account for 50% of Twin Cities Metro Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent of Enrolled Students",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  )
+
+```
+
+## Percent Change in BIPOC Student Representation Across Minneapolis Schools
+
+```{r mpls_bipoc_prep}
+#| echo: false
+#| include: false
+
+# Identify the top schools per level in Minneapolis
+top.mpls.schools <- schools %>% 
+  filter(year==2022, leaname=="Minneapolis Public School District") %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot = sum(member)) %>% 
+  arrange(level, desc(tot)) %>% 
+  ungroup() %>% 
+  group_by(level) %>% 
+  mutate(perc = tot/sum(tot),
+         runsum = cumsum(perc)) %>% 
+  filter(tot>100) %>% 
+  pull(schoolname)
+schools %>% 
+  filter(year==2022, leaname=="Minneapolis Public School District")
+
+# Correct for missing school levels
+school.levels.mpls <- schools %>% 
+  filter(leaname %in% metro.districts, schoolname %in% top.mpls.schools) %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot= n()) %>% 
+  arrange(schoolname, desc(tot)) %>% 
+  slice_head() %>% 
+  select(-tot)
+
+# Percentage of MPLS Students in the School District
+mpls.sch.perc <- as.character(schools %>% 
+  filter(year==2022, leaname=="Minneapolis Public School District") %>% 
+  mutate(topm = case_when(schoolname %in% top.mpls.schools ~ "Top MPLS",
+                          TRUE ~ "NT MPLS"),
+         member = floor(member)) %>% 
+  group_by(topm) %>% 
+  summarise(tot = sum(member)) %>% 
+  mutate(perc = round(tot/sum(tot)*100)) %>% 
+  filter(topm=="Top MPLS") %>% 
+  pull(perc))
+
+
+```
+
+
+```{r mpls_bipoc_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Minneapolis Percent BIPOC Change ----------------------------------------
+
+# Individual School Percent BIPOC Change over time
+schools %>% 
+  left_join(school.levels.mpls, by = "schoolname", suffix = c("", ".df1")) %>%
+  mutate(level = coalesce(level, level.df1)) %>%
+  select(-level.df1) %>% 
+  filter(leaname %in% metro.districts, level %in% c("Elementary/Primary", "High/Secondary", "Middle")) %>% 
+  select(year, schoolname, leaname, level,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member") %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_bipoc_sch = tot_bipoc / tot_member
+  ) %>% 
+  left_join(distr.dems, by = c("leaname", "year")) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc_distr = tot_bipoc / distr_bipoc) %>% 
+  select(year, leaname, level, schoolname, perc_bipoc_sch, perc_bipoc_distr) %>% 
+  pivot_longer(c(-year, -leaname, -schoolname, -level), names_to = "type", values_to = "value") %>% 
+  filter(type=="perc_bipoc_sch", !(schoolname=="MPS Online 6-12" & year==2004)) %>% 
+  group_by(schoolname, leaname) %>%
+  arrange(schoolname, year) %>% 
+  mutate(
+    first_perc = first(value),
+    perc_change = (value - first_perc) / first_perc,
+    perc_change = case_when(is.na(perc_change) ~ c(0),
+                            TRUE ~ perc_change)) %>% 
+  filter(leaname=="Minneapolis Public School District", schoolname %in% top.mpls.schools) %>% 
+  ggplot() +
+  aes(x = year, y = perc_change, group = schoolname, color = level) +
+  geom_line(size = 0.6) +
+  scale_color_manual(values = c("#FA8975FF", "#6C6E72FF", "#40B7ADFF")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(-1.4, 1.4)) +
+  labs(
+    # Main title label
+    title = "Percent Change in BIPOC Student Representation Across Minneapolis Schools, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These Schools Account for ", mpls.sch.perc , "% of Minneapolis School District Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent Change in Proportion of School that is BIPOC",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) 
+
+```
+
+## Percent Change in BIPOC Student Representation Across Saint Paul Schools
+
+```{r spps_bipoc_prep}
+#| echo: false
+#| include: false
+
+# Identify the top schools per level in Minneapolis
+top.spps.schools <- schools %>% 
+  filter(year==2022, leaname=="Saint Paul Public Schools") %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot = sum(member)) %>% 
+  arrange(level, desc(tot)) %>% 
+  ungroup() %>% 
+  group_by(level) %>% 
+  mutate(perc = tot/sum(tot),
+         runsum = cumsum(perc)) %>% 
+  filter(tot>100) %>% 
+  pull(schoolname)
+
+# Correct for missing school levels
+school.levels.spps <- schools %>% 
+  filter(leaname %in% metro.districts, schoolname %in% top.spps.schools) %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot= n()) %>% 
+  arrange(schoolname, desc(tot)) %>% 
+  slice_head() %>% 
+  select(-tot)
+
+# Percentage of SPPS Students in the School District
+spps.sch.perc <- as.character(schools %>% 
+                                filter(year==2022, leaname=="Saint Paul Public Schools") %>% 
+                                mutate(topm = case_when(schoolname %in% top.spps.schools ~ "Top SPPS",
+                                                        TRUE ~ "NT SPPS"),
+                                       member = floor(member)) %>% 
+                                group_by(topm) %>% 
+                                summarise(tot = sum(member)) %>% 
+                                mutate(perc = round(tot/sum(tot)*100)) %>% 
+                                filter(topm=="Top SPPS") %>% 
+                                pull(perc))
+
+```
+
+```{r spps_bipoc_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# St. Paul Percent BIPOC Change Over Time ---------------------------------
+
+# Individual School Percent BIPOC Change over time
+schools %>% 
+  left_join(school.levels.spps, by = "schoolname", suffix = c("", ".df1")) %>%
+  mutate(level = coalesce(level, level.df1)) %>%
+  select(-level.df1) %>% 
+  filter(leaname %in% metro.districts, level %in% c("Elementary/Primary", "High/Secondary", "Middle")) %>% 
+  select(year, schoolname, leaname, level,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member") %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_bipoc_sch = tot_bipoc / tot_member
+  ) %>% 
+  left_join(distr.dems, by = c("leaname", "year")) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc_distr = tot_bipoc / distr_bipoc) %>% 
+  select(year, leaname, level, schoolname, perc_bipoc_sch, perc_bipoc_distr) %>% 
+  pivot_longer(c(-year, -leaname, -schoolname, -level), names_to = "type", values_to = "value") %>% 
+  filter(type=="perc_bipoc_sch") %>% 
+  group_by(schoolname, leaname) %>%
+  arrange(schoolname, year) %>% 
+  mutate(
+    first_perc = first(value),
+    perc_change = (value - first_perc) / first_perc,
+    perc_change = case_when(is.na(perc_change) ~ c(0),
+                            TRUE ~ perc_change)) %>% 
+  filter(leaname=="Saint Paul Public Schools", schoolname %in% top.spps.schools) %>% 
+  ggplot() +
+  aes(x = year, y = perc_change, group = schoolname, color = level) +
+  geom_line(size = 0.6) +
+  scale_color_manual(values = c("#FA8975FF", "#6C6E72FF", "#40B7ADFF")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(-.5, 4.5),
+                     breaks = seq(-.5, 4.5, by = .5)) +
+  labs(
+    # Main title label
+    title = "Percent Change in BIPOC Student Representation Across Saint Paul Schools, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These Schools Account for ", spps.sch.perc , "% of Saint Paul School District Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent Change in Proportion of School that is BIPOC",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) 
+
+```
+
+
+## Percent Change in BIPOC Student Representation Across Anoka-Hennepin Schools
+
+```{r ah_bipoc_prep}
+#| echo: false
+#| include: false
+
+# Identify the top schools per level in Minneapolis
+top.ah.schools <- schools %>% 
+  filter(year==2022, leaname=="Anoka-Hennepin School District") %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot = sum(member)) %>% 
+  arrange(level, desc(tot)) %>% 
+  ungroup() %>% 
+  group_by(level) %>% 
+  mutate(perc = tot/sum(tot),
+         runsum = cumsum(perc)) %>% 
+  filter(tot>100) %>% 
+  pull(schoolname)
+
+# Correct for missing school levels
+school.levels.ah <- schools %>% 
+  filter(leaname %in% metro.districts, schoolname %in% top.ah.schools) %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot= n()) %>% 
+  arrange(schoolname, desc(tot)) %>% 
+  slice_head() %>% 
+  select(-tot)
+
+# Percentage of SPPS Students in the School District
+ah.sch.perc <- as.character(schools %>% 
+                                filter(year==2022, leaname=="Anoka-Hennepin School District") %>% 
+                                mutate(topm = case_when(schoolname %in% top.ah.schools ~ "Top AH",
+                                                        TRUE ~ "NT AH"),
+                                       member = floor(member)) %>% 
+                                group_by(topm) %>% 
+                                summarise(tot = sum(member)) %>% 
+                                mutate(perc = round(tot/sum(tot)*100)) %>% 
+                                filter(topm=="Top AH") %>% 
+                                pull(perc))
+
+
+```
+
+```{r ah_bipoc_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Anoka-Hennepin Percent BIPOC Over Time ----------------------------------
+
+# Individual School Percent BIPOC Change over time
+schools %>% 
+  left_join(school.levels.ah, by = "schoolname", suffix = c("", ".df1")) %>%
+  mutate(level = coalesce(level, level.df1)) %>%
+  select(-level.df1) %>% 
+  filter(leaname %in% metro.districts, level %in% c("Elementary/Primary", "High/Secondary", "Middle")) %>% 
+  select(year, schoolname, leaname, level,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member") %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_bipoc_sch = tot_bipoc / tot_member
+  ) %>% 
+  left_join(distr.dems, by = c("leaname", "year")) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc_distr = tot_bipoc / distr_bipoc) %>% 
+  select(year, leaname, level, schoolname, perc_bipoc_sch, perc_bipoc_distr) %>% 
+  pivot_longer(c(-year, -leaname, -schoolname, -level), names_to = "type", values_to = "value") %>% 
+  filter(type=="perc_bipoc_sch", !(schoolname=="Early Childhood/Special Education" & year==1991)) %>% 
+  group_by(schoolname, leaname) %>%
+  arrange(schoolname, year) %>% 
+  mutate(
+    first_perc = first(value),
+    perc_change = (value - first_perc) / first_perc,
+    perc_change = case_when(is.na(perc_change) ~ c(0),
+                            TRUE ~ perc_change)) %>% 
+  filter(leaname=="Anoka-Hennepin School District", schoolname %in% top.ah.schools) %>% 
+  ggplot() +
+  aes(x = year, y = perc_change, group = schoolname, color = level) +
+  geom_line(size = 0.6) +
+  scale_color_manual(values = c("#FA8975FF", "#6C6E72FF", "#40B7ADFF")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(-.5, 10),
+                     breaks = seq(-.5, 10, by = .5)) +
+  labs(
+    # Main title label
+    title = "Percent Change in BIPOC Student Representation Across Anoka-Hennepin Schools, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These Schools Account for ", ah.sch.perc , "% of Anoka-Hennepin School District Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent Change in Proportion of School that is BIPOC",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) 
+
+```
+
+## 
+
+```{r tc_bipoc_prep}
+#| echo: false
+#| include: false
+
+# Identify the top schools per level in Twin Cities
+top.schools <- schools %>% 
+  filter(year==2022, leaname %in% top.metro.districts) %>% 
+  group_by(schoolname, leaname, level) %>% 
+  summarise(tot = sum(member)) %>% 
+  arrange(level, desc(tot)) %>% 
+  ungroup() %>% 
+  group_by(level) %>% 
+  mutate(perc = tot/sum(tot),
+         runsum = cumsum(perc)) %>% 
+  filter(tot>100) %>% 
+  pull(schoolname)
+
+# Correct for missing school levels
+school.levels <- schools %>% 
+  filter(leaname %in% metro.districts) %>% 
+  group_by(schoolname, level) %>% 
+  summarise(tot= n()) %>% 
+  arrange(schoolname, desc(tot)) %>% 
+  slice_head() %>% 
+  select(-tot)
+
+# Percentage of Twin Cities Students in the School District
+sch.perc <- as.character(schools %>% 
+                           filter(year==2022, leaname %in% top.metro.districts) %>% 
+                           mutate(topm = case_when(schoolname %in% top.schools ~ "Top Schools",
+                                                   TRUE ~ "NT Schools"),
+                                  member = floor(member)) %>%
+                           group_by(topm) %>% 
+                           summarise(tot = sum(member)) %>% 
+                           mutate(perc = round(tot/sum(tot)*100)) %>% 
+                           filter(topm=="Top Schools") %>% 
+                           pull(perc))
+
+```
+
+```{r tc_bipoc_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# TC Wide Percent BIPOC Change --------------------------------------------
+
+# Individual School Percent BIPOC Change over time
+schools %>% 
+  left_join(school.levels, by = "schoolname", suffix = c("", ".df1")) %>%
+  mutate(level = coalesce(level, level.df1)) %>%
+  select(-level.df1) %>% 
+  filter(leaname %in% metro.districts, level %in% c("Elementary/Primary", "High/Secondary", "Middle")) %>% 
+  select(year, schoolname, leaname, level,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member") %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_bipoc_sch = tot_bipoc / tot_member
+  ) %>% 
+  left_join(distr.dems, by = c("leaname", "year")) %>% 
+  mutate(
+    distr_total = distr_white + distr_bipoc,
+    perc_bipoc_distr = tot_bipoc / distr_bipoc) %>% 
+  select(year, leaname, level, schoolname, perc_bipoc_sch, perc_bipoc_distr) %>% 
+  pivot_longer(c(-year, -leaname, -schoolname, -level), names_to = "type", values_to = "value") %>% 
+  filter(type=="perc_bipoc_sch", 
+         !(leaname=="Minneapolis Public School District" & schoolname=="MPS Online 6-12" & year==2004),
+         !(leaname=="Anoka-Hennepin School District" & schoolname=="Early Childhood/Special Education" & year==1991),
+         schoolname!="Ages 3-5 Early Childhood Special Ed") %>% 
+  group_by(schoolname, leaname) %>%
+  arrange(schoolname, year) %>% 
+  mutate(
+    first_perc = first(value),
+    perc_change = (value - first_perc) / first_perc,
+    perc_change = case_when(is.na(perc_change) ~ c(0),
+                            TRUE ~ perc_change)) %>% 
+  filter(leaname %in% top.metro.districts, schoolname %in% top.schools) %>% 
+  ggplot() +
+  aes(x = year, y = perc_change, group = schoolname, color = level) +
+  geom_line(size = 0.6) +
+  scale_color_manual(values = c("#FA8975FF", "#6C6E72FF", "#40B7ADFF")) +
+  facet_wrap(~leaname) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(-2, 5),
+                     breaks = seq(-2, 5, by = 1)) +
+  labs(
+    # Main title label
+    title = "Percent Change in BIPOC Student Representation Across Metro Schools by District, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("These Schools Account for ", sch.perc , "% of Twin Cities School District Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent Change in Proportion of School that is BIPOC",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) 
+
+```
+
+
+# Metro School Enrollment 1991-2022
 
 ## Total Student Enrollment
 
@@ -1045,15 +2162,16 @@ schools %>%
 
 The Dissimilarity index is a measure of...
 
-The methods are borrowed from Reardon's analysis found [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9173588/#SD1). 
+Dissimilarity index was calculated following Wang et al.'s, methods found [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9173588/#SD1). 
 
 $$Dissimilarity = \frac{1}{2} \sum_{i=1}^{n} \left|\frac{b_i}{B}  - \frac{w{_i}}{W} \right|$$
 Where:
-- \( b_i \) is the number of students of a particular racial group in school \( i \).
-- \( B \) is the total number of students of the same racial group enrolled in the district.
-- \( w_i \) is the number of white students in school \( i \).
-- \( W \) is the total number of white students enrolled in the district.
-- \( n \) is the number of schools in the district.
+
+- $b_i$ is the number of students of a particular racial group in school $i$.
+- $B$ is the total number of students of the same racial group enrolled in the district.
+- $w_i$ is the number of white students in school $i$.
+- $W$ is the total number of white students enrolled in the district.
+- $n$ is the number of schools in the district.
 
 
 ## Black-White Dissimilarity Index
@@ -1415,6 +2533,7 @@ h_index <- hisp.metric %>%
 
 ```
 
+
 ```{r h_index_plot}
 #| echo: false
 #| fig-width: 12
@@ -1543,10 +2662,11 @@ Isolation index is a measure of...
 
 $$Isolation = \sum_{i=1}^{n} \left(\frac{B_i}{B} \right) \left(\frac{B{_i}}{T_i} \right)$$
 Where:
-- \( B_i \) is the number of students of a particular racial group in a school \( i \).
-- \( B \) is the total number of students of the same racial group in the entire district.
-- \( T_i \) is the total student enrollment of the district \( i \).
-- \( n \) is the number of schools in the district.
+
+- $B_i$ is the number of students of a particular racial group in a school $i$.
+- $B$ is the total number of students of the same racial group in the entire district.
+- $T_i$ is the total student enrollment of the district $i$.
+- $n$ is the number of schools in the district.
 
 # Interaction Index
 
@@ -1555,11 +2675,12 @@ Interaction Index is a measure of...
 $$Interaction = \sum_{i=1}^n \left( \frac{B_i}{B} \right) \left( \frac{W_i}{T_i} \right)$$
 
 Where:
-- \( B_i \) is the number of students of a particular racial group in a school \( i \).
-- \( B \) is the total number of students of the same racial group in the entire district.
-- \( W_i \) is the number of White students in school \( i \).
-- \( T_i \) is the total student enrollment of the school district \( i \).
-- \( n \) is the number of schools in the district.
+
+- $B_i$ is the number of students of a particular racial group in a school $i$.
+- $B$ is the total number of students of the same racial group in the entire district.
+- $W_i$ is the number of White students in school $i$.
+- $T_i$ is the total student enrollment of the school district $i$.
+- $n$ is the number of schools in the district.
 
 # Normalized Exposure Index
 
