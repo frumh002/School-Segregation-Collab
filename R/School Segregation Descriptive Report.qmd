@@ -18,8 +18,6 @@ execute:
 3. Some school districts have common names (St. Paul Public School District vs. Sain Paul Public Schools | Eden Prairie vs. Eden Paririe Public School District | etc.) - do we merge these or are they separate districts?
 4. The total enrollment seems to be a decimal. Is it appropriate to round down? (conservative)
 5. Many schools are missing level over time, and some have conflicting levels (High School in 2011 and 2013 but Other/Ungraded in 2012). Can we impute standard levels across schools?
-6. I feel like we need to stratify by school levels? The levels analysis I did clearly shows that elementary schools are major culprits to segregation.
-7. Do we add pre-K to levels analysis? Other ungraded?
 
 
 ```{r prep}
