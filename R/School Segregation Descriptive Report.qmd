@@ -3,8 +3,10 @@ title: "School Segregation Descriptive Report"
 author: 
   - Mateo Frumholtz
   - Sara Garcia
-date: 06-20-2024
-format: html
+date: 07-03-2024
+format:
+  html:
+    embed-resources: true
 toc: true
 execute:
   warning: false
@@ -18,6 +20,8 @@ execute:
 3. Some school districts have common names (St. Paul Public School District vs. Sain Paul Public Schools | Eden Prairie vs. Eden Paririe Public School District | etc.) - do we merge these or are they separate districts?
 4. The total enrollment seems to be a decimal. Is it appropriate to round down? (conservative)
 5. Many schools are missing level over time, and some have conflicting levels (High School in 2011 and 2013 but Other/Ungraded in 2012). Can we impute standard levels across schools?
+6. Hmong College Prep (and likely others) have some data quality issues (2010 has 100% hispanic students - assuming data entry error) - can we correct these instances?
+7. Which free/reduced lunch/meausre do we use? Manual or the imputed values? Manual is more conservative.
 
 
 ```{r prep}
@@ -35,6 +39,8 @@ library(gt)
 library(ggtext)
 library(gt)
 library(gtExtras)
+library(ggstream)
+library(ggpmisc)
 
 # Import Dataset
 source("Import NCES.R")
@@ -648,7 +654,7 @@ distr.dems %>%
       color = "#ffffff"
     )
   ) +
-  guides(color = guide_legend(nrow = 6, byrow = TRUE))
+  guides(color = guide_legend(nrow = 5, byrow = TRUE))
 
 
 ```
@@ -688,8 +694,14 @@ bip.tim <- schools %>%
 bip.tim %>% 
   filter(type=="perc_bipoc_sch", leaname %in% top.metro.districts) %>% 
   ggplot() +
-  aes(x = year, y = value, group = schoolname) +
-  geom_line(size = 0.4, color = "#E13342FF") +
+  aes(x = year, y = value, group = year) +
+  geom_boxplot(
+    color = "#E13342FF",
+    # width = .5, 
+    ## remove outliers
+    outlier.color = NA,
+    # alpha = 0.7
+  ) +
   facet_wrap(~leaname) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
                      limits = c(0, 1)) +
@@ -804,8 +816,14 @@ bip.tim %>%
 bip.tim %>% 
   filter(type=="perc_bipoc_distr", leaname %in% top.metro.districts) %>% 
   ggplot() +
-  aes(x = year, y = value, group = schoolname) +
-  geom_line(size = 0.4, color = "#40B7ADFF") +
+  aes(x = year, y = value, group = year) +
+  geom_boxplot(
+    color = "#40B7ADFF",
+    # width = .5, 
+    ## remove outliers
+    outlier.color = NA,
+    # alpha = 0.7
+  ) +
   facet_wrap(~leaname) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1),
                      limits = c(0, 0.4)) +
@@ -1644,8 +1662,307 @@ schools %>%
 
 ```
 
+# Economic Segregation 1991-2022
+
+## Racial Composition and Economic Segregation
+
+```{r econ_prep}
+#| echo: false
+#| include: false
+
+re.lunch <- schools %>% 
+  filter(leaname %in% metro.districts) %>% 
+  select(year, schoolname, leaname, level,
+         tot_nam, tot_asian, tot_hisp, tot_black, tot_tr, tot_white, tot_member = "member",
+         perfrlunch, tot_frlunch) %>% 
+  mutate(
+    across(contains("tot"), floor),
+    tot_bipoc = tot_nam + tot_asian + tot_hisp + tot_black + tot_tr,
+    perc_black = tot_black / tot_member,
+    perc_asian = tot_asian / tot_member,
+    perc_nam = tot_nam / tot_member,
+    perc_tr = tot_tr / tot_member,
+    perc_hisp = tot_hisp / tot_member,
+    perc_bipoc = tot_bipoc / tot_member,
+    perc_frlunch = tot_frlunch / tot_member,
+    hlght = case_when(leaname %in% top.metro.districts ~ leaname,
+                      TRUE ~ c("Other District")),
+    flags = case_when(tot_bipoc>0.8 & perc_frlunch>0.8 ~ "Flag",
+                      TRUE ~ "No Flag")) %>% 
+  select(year, leaname, schoolname, hlght,
+         perc_black, perc_asian, perc_nam, perc_tr, perc_hisp, perc_bipoc, perc_frlunch) %>% 
+  rename(
+    "Black/African American" = "perc_black",
+    "BIPOC" = "perc_bipoc",
+    "Asian/Pacific Islander" = "perc_asian",
+    "Hispanic/Latin@" = "perc_hisp",
+    "Native American" = "perc_nam",
+    "Multiracial" = "perc_tr",
+  ) %>% 
+  pivot_longer(c(-year, -schoolname, -leaname, -perc_frlunch, -hlght), names_to = "type", values_to = "value")
+
+
+```
+
+
+```{r econ_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+# Economic Segregation ----------------------------------------------------
+
+ggplot(re.lunch) +
+  aes(x = value, y = perc_frlunch, color = hlght, group = type) +
+  geom_point(data = re.lunch %>% 
+               filter(hlght=="Other District")) +
+  geom_point(data = re.lunch %>% 
+               filter(hlght!="Other District")) +
+  geom_smooth(method = "lm", aes(x = value, y = perc_frlunch, group = type), color = "black", linewidth = 0.75) +
+  stat_poly_eq(use_label(c("eq", "R2")),
+               label.x = 1,
+               label.y = -1) +
+  scale_color_manual(values = c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
+  scale_y_continuous(limits = c(0, 1), 
+                     labels = scales::percent_format(accuracy = 1)) +
+  scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
+  facet_wrap(~type) +
+  labs(
+    # Main title label
+    title = "Racial Composition and Free/Reduced Lunch, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("School Districts Highlighted Account for 50% of Twin Cities Metro Students in 2022"),
+    # X-axis label
+    x = "Percent Race/Ethnicity",
+    # Y-axis label
+    y = "Percent Free of Reduced Lunch",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) +
+  guides(color = guide_legend(nrow = 5, byrow = TRUE))
+
+  
+
+```
+
 
 # Metro School Enrollment 1991-2022
+
+## Racial Composition by District in Twin Cities Metro
+
+```{r race_district_plot}
+#| echo: false
+#| fig-width: 12
+#| fig-height: 8
+
+distr.dems %>% 
+  ungroup() %>% 
+  filter(leaname %in% metro.districts) %>% 
+  mutate(
+    new_distr = case_when(leaname %in% top.metro.districts ~ leaname,
+                          TRUE ~ "Other District"),
+    distr_tot = distr_asian + distr_nam + distr_hisp + distr_black + distr_tr + distr_white,
+    perc_black = distr_black / distr_tot) %>% 
+  select(year, new_distr, distr_black, distr_nam, distr_asian, distr_hisp, distr_tr, distr_white) %>%
+  rename(
+    "Black/African American" = "distr_black",
+    "White" = "distr_white",
+    "Asian/Pacific Islander" = "distr_asian",
+    "Hispanic/Latin@" = "distr_hisp",
+    "Native American" = "distr_nam",
+    "Multiracial" = "distr_tr",
+  ) %>% 
+  pivot_longer(c(-year, -new_distr), names_to = "type", values_to = "value") %>% 
+  group_by(year, new_distr, type) %>% 
+  summarise(tot = sum(value)) %>% 
+  ggplot() +
+  aes(x = year, y = tot, fill = new_distr) +
+  geom_stream(type = "proportional") +
+  scale_fill_manual(values = c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
+  facet_wrap(~type) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    # Main title label
+    title = "Racial Composition by School District in the Twin Cities Metro, 1991-2022",
+    # Subtitle label
+    subtitle = paste0("School Districts highlighted Account for 50% of Twin Cities Metro Students in 2022"),
+    # X-axis label
+    x = "Fall of School Year",
+    # Y-axis label
+    y = "Percent of Enrolled Students",
+    # Caption label
+    caption = "Sources: Stanford NCES Data.",
+    # Legend titles
+  ) +
+  theme(
+    # Legend location, formatting, and background
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    # Legend background fill and outline (color)
+    legend.background = element_blank(),
+    # 
+    legend.box.background = element_blank(),
+    # Legend box for shapes
+    legend.key = element_blank(),
+    # Overall text formatting
+    text = element_text(
+      family = "",
+      face = "bold",
+      size = 16,
+      color = "black"
+    ),
+    # Plot title formatting (margin t=top, b=bottom)
+    plot.title = element_markdown(
+      lineheight = 1.1,
+      family = "",
+      size = 20,
+      face = "bold",
+      hjust = 0.5,
+      color = "black",
+      margin = margin(
+        t = 0.5, 
+        unit = "cm")
+    ),
+    # Plot subtitle formatting
+    plot.subtitle = element_markdown(
+      family = "",
+      size = 14,
+      hjust = 0.5,
+      face = "plain",
+      color = "black"
+    ),
+    # Plot caption formatting
+    plot.caption = element_text(
+      family = "",
+      size = 10,
+      face = "plain",
+      color = "black"
+    ),
+    # Axes text angle and formatting
+    axis.text.x = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    axis.text.y = element_text(
+      angle = 0, 
+      face = "bold"
+    ),
+    # Overall (x and y) axes ticks formatting
+    axis.ticks = element_blank(),
+    # Overall (x and y) axes lines formatting
+    axis.line = element_line(
+      color = "#b4aea9"
+    ),
+    # Panel grid formatting
+    panel.grid = element_line(
+      color = "grey95"
+    ),
+    # Minor overall (x and y) panel grid formatting
+    panel.grid.minor = element_blank(
+      
+    ),
+    # Major overall (x and y) panel grid formatting
+    panel.grid.major = element_line(
+      linetype = "solid"
+    ),
+    # Panel background (what is inside axes)
+    panel.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    ),
+    # Plot background (what is outside axes)
+    plot.background = element_rect(
+      fill = "#ffffff", 
+      color = "#ffffff"
+    )
+  ) +
+  guides(fill = guide_legend(nrow = 5, byrow = TRUE))
+
+```
+
 
 ## Total Student Enrollment
 
@@ -2230,7 +2547,7 @@ ggplot(b_index %>%
             aes(x = year, y = tr, group = leaname, color = hlght, text = leaname),
             linewidth = 1) +
   scale_y_continuous(limits = c(0, 1)) +
-  scale_color_manual(values = c("#000004FF", "#100B2EFF", "#2D1160FF", "#51127CFF", "#721F81FF", "#932B80FF", "#B63679FF", "#D8456CFF", "grey70", "#F1605DFF", "#FB8861FF", "#FEAF77FF", "#FED799FF", "#FCFDBFFF")) +
+  scale_color_manual(values =  c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
   labs(
     # Main title label
     title = "Minnesota Metro School Districts Black-White Dissimilarity Index 1991-2022",
@@ -2326,7 +2643,7 @@ ggplot(b_index %>%
       color = "#ffffff"
     )
   ) +
-  guides(color = guide_legend(nrow = 6, byrow = TRUE))
+  guides(color = guide_legend(nrow = 5, byrow = TRUE))
 
 ```
 
@@ -2389,7 +2706,7 @@ ggplot(a_index %>%
             aes(x = year, y = tr, group = leaname, color = hlght, text = leaname),
             linewidth = 1) +
   scale_y_continuous(limits = c(0, 1)) +
-  scale_color_manual(values = c("#000004FF", "#100B2EFF", "#2D1160FF", "#51127CFF", "#721F81FF", "#932B80FF", "#B63679FF", "#D8456CFF", "grey70", "#F1605DFF", "#FB8861FF", "#FEAF77FF", "#FED799FF", "#FCFDBFFF")) +
+  scale_color_manual(values =  c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
   labs(
     # Main title label
     title = "Minnesota Metro School Districts Asian-White Dissimilarity Index 1991-2022",
@@ -2486,7 +2803,7 @@ ggplot(a_index %>%
       color = "#ffffff"
     )
   ) +
-  guides(color = guide_legend(nrow = 6, byrow = TRUE))
+  guides(color = guide_legend(nrow = 5, byrow = TRUE))
 
 
 
@@ -2552,7 +2869,7 @@ ggplot(h_index %>%
             aes(x = year, y = tr, group = leaname, color = hlght, text = leaname),
             linewidth = 1) +
   scale_y_continuous(limits = c(0, 1)) +
-  scale_color_manual(values = c("#000004FF", "#100B2EFF", "#2D1160FF", "#51127CFF", "#721F81FF", "#932B80FF", "#B63679FF", "#D8456CFF", "grey70", "#F1605DFF", "#FB8861FF", "#FEAF77FF", "#FED799FF", "#FCFDBFFF")) +
+  scale_color_manual(values =  c("#0000FF", "#FF0000", "#00FF00", "#000033", "#FF00B6", "#005300", "#FFD300", "#009FFF", "grey70", "#9A4D42", "#00FFBE", "#783FC1", "#1F9698", "#FFACFD")) +
   labs(
     # Main title label
     title = "Minnesota Metro School Districts Hispanic-White Dissimilarity Index 1991-2022",
@@ -2649,7 +2966,7 @@ ggplot(h_index %>%
       color = "#ffffff"
     )
   ) +
-  guides(color = guide_legend(nrow = 6, byrow = TRUE))
+  guides(color = guide_legend(nrow = 5, byrow = TRUE))
 
 
 ```
